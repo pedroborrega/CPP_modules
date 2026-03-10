@@ -16,6 +16,73 @@
 #include <stdexcept>
 #include <iostream>
 
+
+std::string trim(const std::string& s)
+{
+	size_t start = s.find_first_not_of(" \t");
+	if (start == std::string::npos)
+		return "";
+	size_t end = s.find_last_not_of(" \t");
+	return s.substr(start, end - start + 1);
+}
+
+bool parseIntStrict(const std::string& s, int& out)
+{
+	if (s.empty())
+		return false;
+	for (size_t i = 0; i < s.size(); ++i)
+	{
+		if (s[i] < '0' || s[i] > '9')
+			return false;
+	}
+	std::stringstream ss(s);
+	ss >> out;
+	return !ss.fail() && ss.eof();
+}
+
+bool parseFloatStrict(const std::string& s, float& out)
+{
+	std::stringstream ss(s);
+	ss >> out;
+	if (ss.fail())
+		return false;
+	char extra;
+	if (ss >> extra)
+		return false;
+	return true;
+}
+
+int daysInMonth(int year, int month)
+{
+	static const int days[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+	if (month == 2)
+	{
+		bool leap = (year % 4 == 0) && ((year % 100 != 0) || (year % 400 == 0));
+		return leap ? 29 : 28;
+	}
+	return days[month - 1];
+}
+
+bool isValidDateImpl(const std::string& date)
+{
+	if (date.size() != 10)
+		return false;
+	if (date[4] != '-' || date[7] != '-')
+		return false;
+	int year, month, day;
+	if (!parseIntStrict(date.substr(0, 4), year))
+		return false;
+	if (!parseIntStrict(date.substr(5, 2), month))
+		return false;
+	if (!parseIntStrict(date.substr(8, 2), day))
+		return false;
+	if (month < 1 || month > 12)
+		return false;
+	if (day < 1 || day > daysInMonth(year, month))
+		return false;
+	return true;
+}
+
 BitcoinExchange::BitcoinExchange() {}
 
 BitcoinExchange::BitcoinExchange(const BitcoinExchange& other) : _data(other._data) {}
@@ -31,40 +98,7 @@ BitcoinExchange::~BitcoinExchange() {}
 
 bool BitcoinExchange::isValidDate(const std::string& date) const
 {
-    if (date.size() != 10)
-        return false;
-    if (date[4] != '-' || date[7] != '-')
-        return false;
-    int year, month, day;
-    try {
-        year  = std::stoi(date.substr(0, 4));
-        month = std::stoi(date.substr(5, 2));
-        day   = std::stoi(date.substr(8, 2));
-		(void) year;
-    }
-    catch (...) {
-        return false;
-    }
-    if (month < 1 || month > 12)
-        return false;
-    if (day < 1 || day > 31)
-        return false;
-    return true;
-}
-
-bool isPositiveFloat(const std::string& s)
-{
-    std::string trimmed = s;
-    trimmed.erase(0, trimmed.find_first_not_of(" \t"));
-    trimmed.erase(trimmed.find_last_not_of(" \t") + 1);
-    std::stringstream ss(trimmed);
-    float v;
-    char extra;
-    if (!(ss >> v))
-        return false;
-    if (ss >> extra)
-        return false;
-    return v >= 0 && v <= 1000;
+	return isValidDateImpl(date);
 }
 
 void BitcoinExchange::loadDatabase(const std::string& filename)
@@ -82,15 +116,10 @@ void BitcoinExchange::loadDatabase(const std::string& filename)
             continue;
         if (!isValidDate(date))
             continue;
-        try
-        {
-            float rate = std::stof(valueStr);
-            _data[date] = rate;
-        }
-        catch (...)
-        {
-            continue;
-        }
+		float rate;
+		if (!parseFloatStrict(valueStr, rate))
+			continue;
+		_data[date] = rate;
     }
 }
 
@@ -101,15 +130,43 @@ float BitcoinExchange::getRate(const std::string& date) const {
 	std::map<std::string,float>::const_iterator it = _data.lower_bound(date);
 
     if (it == _data.end())
-        return std::prev(it)->second;
+	{
+		std::map<std::string,float>::const_iterator last = _data.end();
+		--last;
+        return last->second;
+	}
 
     if (it->first == date)
         return it->second;
 
     if (it == _data.begin())
-        return it->second;
+        throw std::runtime_error("Error: bad input");
 
-    return std::prev(it)->second;
+    std::map<std::string,float>::const_iterator prev = it;
+	--prev;
+	return prev->second;
+}
+
+std::string BitcoinExchange::getClosestDate(const std::string& date) const
+{
+	if (_data.empty())
+		throw std::runtime_error("Database is empty");
+
+	std::map<std::string,float>::const_iterator it = _data.lower_bound(date);
+
+	if (it == _data.end())
+	{
+		std::map<std::string,float>::const_iterator last = _data.end();
+		--last;
+		return last->first;
+	}
+	if (it->first == date)
+		return it->first;
+	if (it == _data.begin())
+		throw std::runtime_error("Error: bad input");
+	std::map<std::string,float>::const_iterator prev = it;
+	--prev;
+	return prev->first;
 }
 
 void parseInput(const std::string& line, std::string& dateStr, float& value)
@@ -118,22 +175,18 @@ void parseInput(const std::string& line, std::string& dateStr, float& value)
     std::string valueStr;
 
     if (!std::getline(ss, dateStr, '|') || !std::getline(ss, valueStr))
-        throw std::runtime_error("Error: bad input format");
+        throw std::runtime_error("Error: bad input");
 
-    size_t start = valueStr.find_first_not_of(" \t");
-    size_t end   = valueStr.find_last_not_of(" \t");
-    if (start == std::string::npos)
-        throw std::runtime_error("Error: missing value");
-    valueStr = valueStr.substr(start, end - start + 1);
+	dateStr = trim(dateStr);
+	valueStr = trim(valueStr);
+	if (dateStr.empty() || valueStr.empty())
+		throw std::runtime_error("Error: bad input");
 
-    size_t idx = 0;
-    try {
-        value = std::stof(valueStr, &idx);
-    } catch (...) {
-        throw std::runtime_error("Error: not a valid number");
-    }
-    if (idx != valueStr.size())
-        throw std::runtime_error("Error: bad input format");
+	if (!isValidDateImpl(dateStr))
+		throw std::runtime_error("Error: bad input");
+
+	if (!parseFloatStrict(valueStr, value))
+		throw std::runtime_error("Error: bad input");
     if (value < 0)
         throw std::runtime_error("Error: not a positive number");
     if (value > 1000)

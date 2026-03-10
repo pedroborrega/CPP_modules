@@ -28,7 +28,7 @@ class BitcoinExchange
 
 		void loadDatabase(const std::string& filename);
     	float getRate(const std::string& date) const;
+		std::string getClosestDate(const std::string& date) const;
 };
 
-bool isPositiveFloat(const std::string& s);
 void parseInput(const std::string& line, std::string& dateStr, float& value);

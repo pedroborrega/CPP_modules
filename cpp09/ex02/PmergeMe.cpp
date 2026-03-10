@@ -18,6 +18,97 @@
 #include <algorithm>
 #include <sys/time.h>
 
+
+// generate Jacobsthal numbers J0=0, J1=1, Jn=Jn-1+2*Jn-2
+std::vector<size_t> buildJacobsthalOrder(size_t n)
+{
+	std::vector<size_t> order;
+	if (n == 0)
+		return order;
+
+	// Track which indices are already scheduled.
+	std::vector<bool> used(n, false);
+
+	// First element is always inserted first.
+	order.push_back(0);
+	used[0] = true;
+
+	// Generate Jacobsthal numbers up to n.
+	std::vector<size_t> jacob;
+	jacob.push_back(0);
+	jacob.push_back(1);
+	while (jacob.back() < n)
+		jacob.push_back(jacob[jacob.size() - 1] + 2 * jacob[jacob.size() - 2]);
+
+	for (size_t k = 2; k < jacob.size(); ++k)
+	{
+		size_t high = jacob[k];
+		size_t low = jacob[k - 1] + 1;
+		for (size_t i = high; i >= low; --i)
+		{
+			size_t idx = i - 1; // 1-based to 0-based
+			if (idx < n && !used[idx])
+			{
+				order.push_back(idx);
+				used[idx] = true;
+			}
+			if (i == low)
+				break;
+		}
+	}
+
+	// Append any remaining indices in increasing order.
+	for (size_t i = 0; i < n; ++i)
+	{
+		if (!used[i])
+			order.push_back(i);
+	}
+
+	return order;
+}
+
+
+template <typename Container>
+void fordJohnson(Container& c)
+{
+	if (c.size() <= 1)
+		return;
+
+	Container mainChain;
+	Container pend;
+
+	for (size_t i = 0; i + 1 < c.size(); i += 2)
+	{
+		if (c[i] < c[i + 1])
+		{
+			mainChain.push_back(c[i + 1]);
+			pend.push_back(c[i]);
+		}
+		else
+		{
+			mainChain.push_back(c[i]);
+			pend.push_back(c[i + 1]);
+		}
+	}
+
+	if (c.size() % 2 != 0)
+		pend.push_back(c.back());
+
+	std::sort(mainChain.begin(), mainChain.end());
+
+	std::vector<size_t> order = buildJacobsthalOrder(pend.size());
+	for (size_t i = 0; i < order.size(); ++i)
+	{
+		size_t idx = order[i];
+		typename Container::iterator pos =
+			std::lower_bound(mainChain.begin(), mainChain.end(), pend[idx]);
+		mainChain.insert(pos, pend[idx]);
+	}
+
+	c = mainChain;
+}
+
+
 PmergeMe::PmergeMe() {}
 
 PmergeMe::PmergeMe(const PmergeMe& other) : _vec(other._vec), _deq(other._deq) {}
@@ -40,80 +131,6 @@ void PmergeMe::setData(const std::vector<int>& vec, const std::deque<int>& deq)
 	_deq = deq;
 }
 
-void PmergeMe::fordJohnsonVector(std::vector<int>& v)
-{
-	if (v.size() <= 1)
-		return;
-
-	std::vector<int> mainChain;
-	std::vector<int> pend;
-
-	for (size_t i = 0; i + 1 < v.size(); i += 2)
-	{
-		if (v[i] < v[i + 1])
-		{
-			mainChain.push_back(v[i + 1]);
-			pend.push_back(v[i]);
-		}
-		else
-		{
-			mainChain.push_back(v[i]);
-			pend.push_back(v[i + 1]);
-		}
-	}
-
-	if (v.size() % 2 != 0)
-		pend.push_back(v.back());
-
-	std::sort(mainChain.begin(), mainChain.end());
-
-	for (size_t i = 0; i < pend.size(); ++i)
-	{
-		std::vector<int>::iterator pos =
-			std::lower_bound(mainChain.begin(), mainChain.end(), pend[i]);
-		mainChain.insert(pos, pend[i]);
-	}
-
-	v = mainChain;
-}
-
-void PmergeMe::fordJohnsonDeque(std::deque<int>& d)
-{
-	if (d.size() <= 1)
-		return;
-
-	std::deque<int> mainChain;
-	std::deque<int> pend;
-
-	for (size_t i = 0; i + 1 < d.size(); i += 2)
-	{
-		if (d[i] < d[i + 1])
-		{
-			mainChain.push_back(d[i + 1]);
-			pend.push_back(d[i]);
-		}
-		else
-		{
-			mainChain.push_back(d[i]);
-			pend.push_back(d[i + 1]);
-		}
-	}
-
-	if (d.size() % 2 != 0)
-		pend.push_back(d.back());
-
-	std::sort(mainChain.begin(), mainChain.end());
-
-	for (size_t i = 0; i < pend.size(); ++i)
-	{
-		std::deque<int>::iterator pos =
-			std::lower_bound(mainChain.begin(), mainChain.end(), pend[i]);
-		mainChain.insert(pos, pend[i]);
-	}
-
-	d = mainChain;
-}
-
 void PmergeMe::sortAndDisplay()
 {
 	std::cout << "Before: ";
@@ -123,7 +140,7 @@ void PmergeMe::sortAndDisplay()
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
-	fordJohnsonVector(_vec);
+	fordJohnson(_vec);
 	gettimeofday(&end, NULL);
 
 	double vecTime =
@@ -131,7 +148,7 @@ void PmergeMe::sortAndDisplay()
 		(end.tv_usec - start.tv_usec);
 
 	gettimeofday(&start, NULL);
-	fordJohnsonDeque(_deq);
+	fordJohnson(_deq);
 	gettimeofday(&end, NULL);
 
 	double deqTime =

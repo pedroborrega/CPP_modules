@@ -6,7 +6,7 @@
 /*   By: psantos- <psantos-@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
 /*   Created: 2025/12/04 17:07:23 by psantos-          #+#    #+#             */
-/*   Updated: 2025/12/04 17:18:52 by psantos-         ###   ########.fr       */
+/*   Updated: 2026/02/10 12:45:53 by psantos-         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -54,11 +54,6 @@ int main()
     {
         std::cout << "Exception caught: " << e.what() << std::endl;
     }
-
-	// Default-initialize a single int
-    int* a = new int(); //
-    std::cout << "*a = " << *a << std::endl;
-    delete a;
 
     // Array of strings using Array template
     Array<std::string> words(3);

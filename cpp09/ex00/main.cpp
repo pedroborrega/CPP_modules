@@ -51,12 +51,19 @@ int main(int argc, char **argv)
         try
         {
             parseInput(line, date, value);
-            float rate = btc.getRate(date);
-            std::cout << date << " => " << value << " = " << value * rate << std::endl;
+			std::string usedDate = btc.getClosestDate(date);
+            float rate = btc.getRate(usedDate);
+            std::cout << usedDate << " => " << value << " = " << value * rate << std::endl;
         }
         catch (const std::exception &e)
         {
-            std::cerr << e.what() << " => " << line << std::endl;
+			std::string msg = e.what();
+			if (msg == "Error: not a positive number." || msg == "Error: too large a number.")
+				std::cerr << msg << std::endl;
+			else if (msg == "Error: bad input")
+				std::cerr << "Error: bad input => " << line << std::endl;
+			else
+				std::cerr << msg << std::endl;
         }
     }
 
